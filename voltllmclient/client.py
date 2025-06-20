@@ -54,7 +54,7 @@ class LLMClient:
             response = requests.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            return self.extract_content(result)
         except requests.RequestException as e:
             Logger.error(f"Request failed: {e}")
         except KeyError:
@@ -62,6 +62,11 @@ class LLMClient:
 
         return None
     
+    def extract_content(self, result):
+        if "choices" in result:
+            return result["choices"][0]["message"]["content"] #OpenWebUI
+        return result["message"]["content"] #Ollama
+
     def send_conversation(self, messages):
         headers = {
             'Authorization': f'Bearer {self.bearer_token}',
@@ -77,7 +82,7 @@ class LLMClient:
         response = requests.post(self.api_url, headers=headers, json=payload)
         response.raise_for_status()
         result = response.json()
-        return result["choices"][0]["message"]["content"]
+        return self.extract_content(result)
 
 
 
