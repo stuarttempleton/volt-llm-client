@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='voltllmclient',
-    version='0.1.0',
+    version='0.1.1',
     description='A lightweight client for local LLM APIs like Ollama or OpenWebUI',
     author='Voltur',
     url='https://github.com/stuarttempleton/volt-llm-client',
