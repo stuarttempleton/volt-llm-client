@@ -20,9 +20,7 @@ It supports prompt completion, multi-turn conversations, and model listing — p
 Install both `volt-llm-client` and its logging dependency:
 
 ```bash
-pip install \
-  git+https://github.com/stuarttempleton/volt-logger.git \
-  git+https://github.com/stuarttempleton/volt-llm-client.git
+pip install git+https://github.com/stuarttempleton/volt-llm-client.git
 ````
 
 For local development:
