@@ -5,7 +5,7 @@ It supports prompt completion, multi-turn conversations, and model listing — p
 
 ---
 
-## 🔧 Features
+## Features
 
 - Send single prompts or full conversations
 - Compatible with Ollama/OpenWebUI-style APIs
@@ -15,12 +15,14 @@ It supports prompt completion, multi-turn conversations, and model listing — p
 
 ---
 
-## 📦 Installation
+## Installation
 
-Install directly from GitHub (also pulls in `volt-logger`):
+Install both `volt-llm-client` and its logging dependency:
 
 ```bash
-pip install git+https://github.com/stuarttempleton/volt-llm-client.git
+pip install \
+  git+https://github.com/stuarttempleton/volt-logger.git \
+  git+https://github.com/stuarttempleton/volt-llm-client.git
 ````
 
 For local development:
@@ -33,7 +35,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🧪 Usage Example
+## Usage Example
 
 ```python
 import os
@@ -62,7 +64,7 @@ print(response)
 
 ---
 
-## 🗣️ Maintaining Context with LLMConversation
+## Maintaining Context with LLMConversation
 
 ```python
 from voltllmclient import LLMConversation
@@ -81,7 +83,7 @@ conv.save_transcript("session.json")
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
 Set your API token via environment variable:
 
@@ -99,7 +101,7 @@ $env:LLM_API_TOKEN = "your_token_here"
 
 ---
 
-## 🪪 License
+## License
 
 [MIT](LICENSE)
 
