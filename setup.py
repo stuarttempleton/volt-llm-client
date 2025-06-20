@@ -10,7 +10,8 @@ setup(
     packages=find_packages(),
     python_requires='>=3.7',
     install_requires=[
-        'requests'
+        'requests',
+        'volt-logger>=0.1.0'  # <-- Add this line
     ],
     classifiers=[
         'License :: OSI Approved :: MIT License',

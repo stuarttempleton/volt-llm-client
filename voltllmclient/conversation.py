@@ -1,8 +1,9 @@
-# LLMConversation.py
+# conversation.py
 # 05/17/2025 - Voltur
 #
 # Maintains multi-turn conversation context with a local LLM via OpenWebUI/Ollama.
 # Depends on LLMClient.py
+
 
 from .client import LLMClient
 import sys

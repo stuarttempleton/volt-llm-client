@@ -1,2 +1,2 @@
 requests
-git+https://github.com/stuarttempleton/volt-logger.git
+volt-logger>=0.1.0

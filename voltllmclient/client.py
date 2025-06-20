@@ -1,8 +1,9 @@
-# LLMClient.py
+# client.py
 # 05/17/2025 - Voltur
 #
 # An interface to local (ollama style) LLM API.
 # 
+
 
 import requests
 import sys
