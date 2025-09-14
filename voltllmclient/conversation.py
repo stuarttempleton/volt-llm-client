@@ -9,7 +9,7 @@ from .client import LLMClient
 import sys
 
 class LLMConversation:
-    def __init__(self, model="gemma3", system_prompt=None, token=None, api_url="http://localhost:3000/api/chat/completions"):
+    def __init__(self, model="gemma3", system_prompt=None, token=None, api_url="http://localhost:3000"):
         self.client = LLMClient(model=model, token=token, api_url=api_url)
         self.messages = [
             {
