@@ -9,8 +9,8 @@ from .client import LLMClient
 import sys
 
 class LLMConversation:
-    def __init__(self, model="gemma3", system_prompt=None, token=None, api_url="http://localhost:3000"):
-        self.client = LLMClient(model=model, token=token, api_url=api_url)
+    def __init__(self, model="gemma3", system_prompt=None, token=None, base_url="http://localhost:3000"):
+        self.client = LLMClient(model=model, token=token, base_url=base_url)
         self.messages = [
             {
                 "role": "system",
