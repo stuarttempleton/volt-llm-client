@@ -132,7 +132,6 @@ class LLMClient:
                     return message.get("content", "")
                 messages.append(message)
                 for call_id, name, args in calls:
-                    Logger.log(f"MCP tool call: {name}({args})")
                     reply = {"role": "tool", "content": self.mcp.call(name, args)}
                     if call_id:
                         reply["tool_call_id"] = call_id

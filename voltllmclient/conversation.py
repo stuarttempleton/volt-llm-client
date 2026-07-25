@@ -10,6 +10,14 @@ import sys
 
 class LLMConversation:
     def __init__(self, model="Gemma4", system_prompt=None, token=None, base_url="http://localhost:11434", mcp=None):
+        # mcp takes either a Docker MCP profile name, which we build and own a provider for, or a
+        # provider the caller built and manages themselves.
+        self._own_mcp = None
+        if isinstance(mcp, str):
+            from .mcptools import MCPToolProvider
+            self._own_mcp = MCPToolProvider(profile=mcp)
+            # Tools are best effort: a dead gateway leaves us a working chat.
+            mcp = self._own_mcp if self._own_mcp.connect() else None
         self.client = LLMClient(model=model, token=token, base_url=base_url, mcp=mcp)
         self.use_tools = mcp is not None
         self.messages = [
@@ -49,6 +57,18 @@ class LLMConversation:
 
         return reply
 
+
+    def close(self):
+        # Only shut down a provider we built; a caller-supplied one is theirs to close.
+        if self._own_mcp:
+            self._own_mcp.close()
+            self._own_mcp = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def send_with_full_context(self, user_content):
         return self.send(user_content, send_everything=True)

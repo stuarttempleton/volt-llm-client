@@ -7,6 +7,7 @@
 
 
 import asyncio
+import atexit
 import fnmatch
 import os
 import tempfile
@@ -46,7 +47,11 @@ class MCPToolProvider:
         self._specs = None
         self._failed = False
         self._loop = asyncio.new_event_loop()
-        threading.Thread(target=self._loop.run_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+        # Callers who forget close() would otherwise get "Task was destroyed but it is pending!"
+        # from the session task still running on our loop at interpreter shutdown.
+        atexit.register(self.close)
 
     def _run(self, coro, timeout=None):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout or self.timeout)
@@ -72,7 +77,7 @@ class MCPToolProvider:
                                            log_file=Path(self._log_path)))
             self._run(client.__aenter__(), self.connect_timeout)
             self._client = client
-            Logger.log(f"MCP connected: {len(self.tool_specs())} tools")
+            self.tool_specs()  # cache now, so a listing failure surfaces here rather than mid-chat
             return True
         except Exception as e:
             reason = self._gateway_error() or e
@@ -130,8 +135,9 @@ class MCPToolProvider:
             }
             for t in tools if self._keep(t.name)
         ]
-        if self.tools or self.include:
-            Logger.log(f"MCP tool filter: {len(self._specs)}/{len(tools)} tools advertised")
+        if tools and not self._specs:
+            # A typo'd filter silently disables tools, so this one is worth saying out loud.
+            Logger.warn(f"MCP tool filter matched none of {len(tools)} tools")
         return self._specs
 
     def call(self, name, arguments):
@@ -141,12 +147,14 @@ class MCPToolProvider:
             result = self._run(self._client.call_tool(name, arguments or {}))
         except Exception as e:
             # Hand the failure to the model as text so it can recover or explain.
-            Logger.warn(f"MCP tool '{name}' failed: {e}")
+            Logger.warn(f"MCP tool {name}({arguments}) failed: {e}")
             return f"Error: {e}"
         texts = [b.text for b in getattr(result, "content", []) or [] if getattr(b, "text", None)]
         return "\n".join(texts) if texts else str(getattr(result, "data", ""))
 
     def close(self):
+        if self._loop.is_closed():
+            return  # already closed; atexit may call this a second time
         if self._client:
             try:
                 self._run(self._client.__aexit__(None, None, None), self.timeout)
@@ -159,4 +167,16 @@ class MCPToolProvider:
                 os.unlink(self._log_path)
             except OSError:
                 pass
+        # Cancel whatever the session left running, or the loop thread dies mid-task at shutdown.
+        for task in asyncio.all_tasks(self._loop):
+            self._loop.call_soon_threadsafe(task.cancel)
         self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join(timeout=5)
+        self._loop.close()
+        atexit.unregister(self.close)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()

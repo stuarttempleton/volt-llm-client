@@ -40,6 +40,57 @@ def test_send_with_summary_context(conversation, mock_client):
     assert "system" in roles
     assert roles.count("user") == 1  # Only new user message
 
+# --- mcp lifecycle ---------------------------------------------------------
+
+def test_profile_string_builds_and_owns_a_provider(mock_client):
+    with patch("voltllmclient.mcptools.MCPToolProvider") as MockProvider:
+        provider = MockProvider.return_value
+        provider.connect.return_value = True
+        conv = LLMConversation(mcp="my_profile")
+
+        MockProvider.assert_called_once_with(profile="my_profile")
+        assert conv.use_tools is True
+        conv.close()
+        provider.close.assert_called_once()
+
+
+def test_supplied_provider_is_not_closed(mock_client):
+    provider = MagicMock()
+    conv = LLMConversation(mcp=provider)
+
+    assert conv.use_tools is True
+    conv.close()
+    # The caller owns this one; closing it out from under them would be rude.
+    provider.close.assert_not_called()
+
+
+def test_failed_connect_leaves_a_working_chat(mock_client):
+    with patch("voltllmclient.mcptools.MCPToolProvider") as MockProvider:
+        MockProvider.return_value.connect.return_value = False
+        conv = LLMConversation(mcp="my_profile")
+
+        assert conv.use_tools is False
+        assert conv.send("Hello!") == "Mocked response"
+        conv.close()
+
+
+def test_no_mcp_never_imports_a_provider(mock_client):
+    with patch("voltllmclient.mcptools.MCPToolProvider") as MockProvider:
+        conv = LLMConversation()
+        assert conv.use_tools is False
+        conv.close()
+        MockProvider.assert_not_called()
+
+
+def test_context_manager_closes_own_provider(mock_client):
+    with patch("voltllmclient.mcptools.MCPToolProvider") as MockProvider:
+        provider = MockProvider.return_value
+        provider.connect.return_value = True
+        with LLMConversation(mcp="my_profile") as conv:
+            assert conv.use_tools is True
+        provider.close.assert_called_once()
+
+
 def test_save_and_load_transcript(conversation):
     conversation.send("Testing save/load")
 

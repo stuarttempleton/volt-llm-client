@@ -104,6 +104,19 @@ if provider.connect():
 provider.close()
 ```
 
+`LLMConversation` can do the plumbing for you — hand it a profile name and it builds, connects, and
+closes the provider itself:
+
+```python
+from voltllmclient import LLMConversation
+
+with LLMConversation(model="gemma4", mcp="my_profile") as conv:
+    print(conv.send("What is in my log files?"))
+```
+
+Pass a `MCPToolProvider` instead of a string when you want the filtering options, or to share one
+gateway across several conversations. A provider you built is yours: `close()` leaves it running.
+
 List your profiles with `docker mcp profile list`, and check what a profile exposes with
 `docker mcp tools ls --gateway-arg=--profile=<name>`.
 

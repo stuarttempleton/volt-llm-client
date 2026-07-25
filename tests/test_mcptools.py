@@ -316,6 +316,37 @@ def test_tool_specs_builds_openai_shape():
         p.close()
 
 
+def test_tool_specs_warns_when_filter_matches_nothing(capfd):
+    p = MCPToolProvider(include="typo_*")
+    try:
+        tool = Mock()
+        tool.name = "get_file"
+        tool.description = ""
+        tool.inputSchema = {}
+        p._client = Mock()
+        with patch.object(p, "_run", return_value=[tool]):
+            assert p.tool_specs() == []
+        # Silently advertising nothing looks identical to "the model ignored the tools".
+        assert "matched none of 1 tools" in capfd.readouterr()[0]
+    finally:
+        p.close()
+
+
+def test_tool_specs_silent_on_success(capfd):
+    p = MCPToolProvider(include="get_*")
+    try:
+        tool = Mock()
+        tool.name = "get_file"
+        tool.description = ""
+        tool.inputSchema = {}
+        p._client = Mock()
+        with patch.object(p, "_run", return_value=[tool]):
+            assert len(p.tool_specs()) == 1
+        assert capfd.readouterr()[0] == ""
+    finally:
+        p.close()
+
+
 def test_call_flattens_text_content():
     p = MCPToolProvider()
     try:
