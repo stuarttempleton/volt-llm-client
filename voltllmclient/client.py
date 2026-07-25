@@ -11,22 +11,37 @@ import os
 from voltlogger import Logger
 
 class LLMClient:
-    def __init__(self, base_url="http://localhost:11434", token=None, model="Gemma3", temperature=0.2):
+    def __init__(self, base_url="http://localhost:11434", token=None, model="Gemma3", temperature=0.2, timeout=120):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.temperature = temperature or 0.2
         self.bearer_token = token or os.getenv("LLM_API_TOKEN", "")
+        self.timeout = timeout
         self.api_type = None
         self.endpoints = {}
         self._detect_api_type()
-    
+
+    def _build_payload(self, messages):
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False
+        }
+        if self.api_type == "ollama":
+            # Ollama takes generation settings under "options", not top-level.
+            payload["options"] = {"temperature": self.temperature}
+        else:
+            payload["temperature"] = self.temperature
+        return payload
+
+
     def get_models(self):
         headers = {
             'Authorization': f'Bearer {self.bearer_token}',
             'Content-Type': 'application/json'
         }
         try:
-            response = requests.get(self.endpoints['models'], headers=headers)
+            response = requests.get(self.endpoints['models'], headers=headers, timeout=self.timeout)
             response.raise_for_status()
             result = response.json()
             return result
@@ -41,18 +56,13 @@ class LLMClient:
             'Authorization': f'Bearer {self.bearer_token}',
             'Content-Type': 'application/json'
         }
-        data = {
-            "model": self.model,
-            "messages": [
-                { "role": "system", "content": system_prompt or "You are a helpful and friendly AI assistant." },
-                { "role": "user", "content": prompt }
-            ],
-            "temperature": self.temperature,
-            "stream": False
-        }
+        data = self._build_payload([
+            { "role": "system", "content": system_prompt or "You are a helpful and friendly AI assistant." },
+            { "role": "user", "content": prompt }
+        ])
         try:
-            Logger.error(f"API Type: {self.api_type}, Endpoint: {self.endpoints['chat']}")
-            response = requests.post(self.endpoints['chat'], headers=headers, json=data)
+            #Logger.error(f"API Type: {self.api_type}, Endpoint: {self.endpoints['chat']}")
+            response = requests.post(self.endpoints['chat'], headers=headers, json=data, timeout=self.timeout)
             response.raise_for_status()
             result = response.json()
             return self.extract_content(result)
@@ -78,16 +88,17 @@ class LLMClient:
             'Authorization': f'Bearer {self.bearer_token}',
             'Content-Type': 'application/json'
         }
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "stream": False
-        }
-        response = requests.post(self.endpoints['chat'], headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        return self.extract_content(result)
+        payload = self._build_payload(messages)
+        try:
+            response = requests.post(self.endpoints['chat'], headers=headers, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            result = response.json()
+            return self.extract_content(result)
+        except requests.RequestException as e:
+            Logger.error(f"Request failed: {e}")
+        except KeyError:
+            Logger.error(f"Unexpected response: {getattr(response, 'text', '')}")
+        return None
 
     def _detect_api_type(self):
         headers = {
