@@ -11,7 +11,7 @@ import os
 from voltlogger import Logger
 
 class LLMClient:
-    def __init__(self, base_url="http://localhost:3000", token=None, model="Gemma3", temperature=0.2):
+    def __init__(self, base_url="http://localhost:11434", token=None, model="Gemma3", temperature=0.2):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.temperature = temperature or 0.2
@@ -132,13 +132,8 @@ if __name__ == "__main__":
         Logger.help(f"Usage: python {sys.argv[0]} <model> <prompt>")
         sys.exit(1)
 
-    token = os.getenv("LLM_API_TOKEN")
-    if not token:
-        Logger.warn("Missing API token. Please set LLM_API_TOKEN as a user environment variable.")
-        sys.exit(1)
-
     # Only pass base_url (domain:port), not full endpoint
-    llm = LLMClient(base_url="http://localhost:3000", token=token, model=sys.argv[1])
+    llm = LLMClient(base_url="http://localhost:11434", model=sys.argv[1])
     reply = llm.send_prompt(sys.argv[2])
 
     if reply:
