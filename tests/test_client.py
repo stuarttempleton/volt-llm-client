@@ -6,7 +6,7 @@ from voltllmclient.client import LLMClient
 
 # Sample response data
 mock_model_response = {
-    "data": [{"id": "gemma:7b", "name": "Gemma3"}]
+    "data": [{"id": "gemma:7b", "name": "Gemma4"}]
 }
 
 mock_chat_response = {
@@ -91,7 +91,7 @@ def _ollama_get(url, *args, **kwargs):
     # /api/models must not look like Open WebUI, so detection falls through to /api/tags
     if url.endswith("/api/models"):
         return _resp([])
-    return _resp({"models": [{"name": "gemma3"}]})
+    return _resp({"models": [{"name": "gemma4"}]})
 
 
 def test_detect_api_type_ollama():

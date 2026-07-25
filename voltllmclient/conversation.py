@@ -9,8 +9,9 @@ from .client import LLMClient
 import sys
 
 class LLMConversation:
-    def __init__(self, model="Gemma3", system_prompt=None, token=None, base_url="http://localhost:11434"):
-        self.client = LLMClient(model=model, token=token, base_url=base_url)
+    def __init__(self, model="Gemma4", system_prompt=None, token=None, base_url="http://localhost:11434", mcp=None):
+        self.client = LLMClient(model=model, token=token, base_url=base_url, mcp=mcp)
+        self.use_tools = mcp is not None
         self.messages = [
             {
                 "role": "system",
@@ -38,7 +39,10 @@ class LLMConversation:
                 {"role": "user", "content": user_content}
             ]
 
-        reply = self.client.send_conversation(prompt)
+        if self.use_tools:
+            reply = self.client.send_with_tools(prompt)
+        else:
+            reply = self.client.send_conversation(prompt)
 
         self.messages.append({"role": "user", "content": user_content})
         self.messages.append({"role": "assistant", "content": reply})

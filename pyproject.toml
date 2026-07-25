@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "volt-llm-client"
-version = "0.1.2"
+version = "0.2.0"
 description = "A lightweight client for local LLM APIs like Ollama or OpenWebUI"
 readme = "README.md"
 requires-python = ">=3.7"
@@ -22,6 +22,11 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest", "requests", "pytest-mock"]
+mcp = ["fastmcp"]
+
+[tool.pytest.ini_options]
+# Tests patch MCPToolProvider._run, so the coroutine it would have awaited is discarded.
+filterwarnings = ["ignore:coroutine .* was never awaited:RuntimeWarning"]
 
 [project.urls]
 "Homepage" = "https://github.com/stuarttempleton/volt-llm-client"
