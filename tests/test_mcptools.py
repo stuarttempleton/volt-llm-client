@@ -170,6 +170,43 @@ def test_send_with_tools_does_not_mutate_caller_messages():
         assert messages == [{"role": "user", "content": "hi"}]
 
 
+def test_send_with_tools_collects_transcript():
+    with patch("requests.get", return_value=_resp({"data": []})), patch("requests.post") as mock_post:
+        mock_post.side_effect = [
+            _resp(_tool_call_response("openwebui", '{"id": "notes.txt"}')),
+            _resp({"choices": [{"message": {"content": "done"}}]}),
+        ]
+        client = LLMClient(token="t", mcp=_mock_mcp("hello"))
+        transcript = []
+        client.send_with_tools([{"role": "user", "content": "hi"}], transcript=transcript)
+
+        # The tool_calls message and its result, in order, and nothing else.
+        assert [m["role"] for m in transcript] == ["assistant", "tool"]
+        assert transcript[0]["tool_calls"][0]["function"]["name"] == "get_file"
+        assert transcript[1]["content"] == "hello"
+        assert transcript[1]["tool_call_id"] == "call_abc123"
+
+
+def test_send_with_tools_transcript_empty_when_no_tools_used():
+    with patch("requests.get", return_value=_resp({"data": []})), \
+         patch("requests.post", return_value=_resp({"choices": [{"message": {"content": "plain"}}]})):
+        client = LLMClient(token="t", mcp=_mock_mcp())
+        transcript = []
+        assert client.send_with_tools([{"role": "user", "content": "hi"}], transcript=transcript) == "plain"
+        assert transcript == []
+
+
+def test_send_with_tools_transcript_is_optional():
+    # Omitting transcript must keep the old behaviour exactly.
+    with patch("requests.get", return_value=_resp({"data": []})), patch("requests.post") as mock_post:
+        mock_post.side_effect = [
+            _resp(_tool_call_response("openwebui", '{"id": "notes.txt"}')),
+            _resp({"choices": [{"message": {"content": "done"}}]}),
+        ]
+        client = LLMClient(token="t", mcp=_mock_mcp())
+        assert client.send_with_tools([{"role": "user", "content": "hi"}]) == "done"
+
+
 def test_send_with_tools_caps_rounds(capfd):
     with patch("requests.get", return_value=_resp({"data": []})), patch("requests.post") as mock_post:
         # Model asks for a tool forever

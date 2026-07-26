@@ -48,7 +48,7 @@ def test_profile_string_builds_and_owns_a_provider(mock_client):
         provider.connect.return_value = True
         conv = LLMConversation(mcp="my_profile")
 
-        MockProvider.assert_called_once_with(profile="my_profile")
+        MockProvider.assert_called_once_with(profile="my_profile", include=None)
         assert conv.use_tools is True
         conv.close()
         provider.close.assert_called_once()
@@ -89,6 +89,132 @@ def test_context_manager_closes_own_provider(mock_client):
         with LLMConversation(mcp="my_profile") as conv:
             assert conv.use_tools is True
         provider.close.assert_called_once()
+
+
+# --- tool history retention ------------------------------------------------
+
+def _tool_using_conversation(mock_client, tool_msgs):
+    """A conversation whose client reports a tool round-trip via transcript=."""
+    def fake_send(prompt, transcript=None, **kwargs):
+        if transcript is not None:
+            transcript.extend(tool_msgs)
+        return "Answer from tool"
+    mock_client.send_with_tools.side_effect = fake_send
+
+    provider = MagicMock()
+    return LLMConversation(mcp=provider, system_prompt="You are mock AI.")
+
+
+def test_tool_round_trip_is_kept_in_history(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "user found: usr_123"},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.send("who is tupper?")
+
+    roles = [m["role"] for m in conv.messages]
+    # system, user, assistant(tool_calls), tool, assistant(answer)
+    assert roles == ["system", "user", "assistant", "tool", "assistant"]
+    assert any(m["role"] == "tool" and "usr_123" in m["content"] for m in conv.messages)
+    # The tool evidence must sit after the user turn and before the final answer.
+    assert conv.messages[-1] == {"role": "assistant", "content": "Answer from tool"}
+
+
+def test_tool_history_is_replayed_on_the_next_turn(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "user found: usr_123"},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.send("who is tupper?")
+    mock_client.send_with_tools.side_effect = lambda prompt, transcript=None, **kw: "Second answer"
+    conv.send_with_full_context("what groups are they in?")
+
+    # Turn 2 must see the tool result from turn 1, or it re-runs the lookup.
+    sent = mock_client.send_with_tools.call_args[0][0]
+    assert any(m["role"] == "tool" and "usr_123" in m["content"] for m in sent)
+
+
+def test_summary_context_skips_orphaned_tool_calls(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "user found: usr_123"},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.send("who is tupper?")
+    mock_client.send_with_tools.side_effect = lambda prompt, transcript=None, **kw: "Second answer"
+    conv.send_with_summary_context("and now?")
+
+    sent = mock_client.send_with_tools.call_args[0][0]
+    # assistant_only drops role="tool", so a tool_calls message would be orphaned
+    # and rejected by OpenAI-compatible endpoints.
+    assert not any(m.get("tool_calls") for m in sent)
+    assert not any(m["role"] == "tool" for m in sent)
+
+
+def test_large_tool_result_is_truncated_in_history(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user_groups", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "x" * 50_000},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.max_tool_result_chars = 4000
+    conv.send("what groups?")
+
+    stored = [m for m in conv.messages if m["role"] == "tool"][0]
+    assert len(stored["content"]) < 4200
+    assert "46000 chars truncated" in stored["content"]
+    # The original transcript entry must not be mutated in place.
+    assert len(tool_msgs[1]["content"]) == 50_000
+
+
+def test_small_tool_result_is_kept_verbatim(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "usr_123"},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.send("who?")
+    assert [m for m in conv.messages if m["role"] == "tool"][0]["content"] == "usr_123"
+
+
+def test_tool_results_are_kept_whole_by_default(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "y" * 20_000},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    assert conv.max_tool_result_chars is None
+    conv.send("dump it")
+    assert len([m for m in conv.messages if m["role"] == "tool"][0]["content"]) == 20_000
+
+
+def test_mcp_include_is_passed_to_provider(mock_client):
+    with patch("voltllmclient.mcptools.MCPToolProvider") as MockProvider:
+        MockProvider.return_value.connect.return_value = True
+        conv = LLMConversation(mcp="my_profile", mcp_include="get_*,search_*")
+        MockProvider.assert_called_once_with(profile="my_profile", include="get_*,search_*")
+        conv.close()
+
+
+def test_tool_history_survives_transcript_round_trip(mock_client):
+    tool_msgs = [
+        {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "get_user", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "user found: usr_123"},
+    ]
+    conv = _tool_using_conversation(mock_client, tool_msgs)
+    conv.send("who is tupper?")
+
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+    tmp_file.close()
+    try:
+        conv.save_transcript(tmp_file.name)
+        reloaded = LLMConversation()
+        reloaded.load_transcript(tmp_file.name)
+        assert reloaded.messages == conv.messages
+    finally:
+        os.unlink(tmp_file.name)
 
 
 def test_save_and_load_transcript(conversation):

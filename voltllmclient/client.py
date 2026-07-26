@@ -114,7 +114,16 @@ class LLMClient:
             calls.append((call.get("id"), fn.get("name"), args or {}))
         return calls
 
-    def send_with_tools(self, messages, max_tool_rounds=5):
+    def send_with_tools(self, messages, max_tool_rounds=5, transcript=None):
+        """
+        Chat with tools, looping until the model stops asking for them.
+
+        Returns the final assistant text. Pass transcript=[] to also collect the
+        tool round-trip (the assistant tool_calls messages and their tool results)
+        in order. A caller keeping multi-turn history should retain those: without
+        them the model sees only its own prose summary of a tool result on later
+        turns, with no evidence a tool ran, and tends to re-call or claim it cannot.
+        """
         headers = {
             'Authorization': f'Bearer {self.bearer_token}',
             'Content-Type': 'application/json'
@@ -131,6 +140,8 @@ class LLMClient:
                 if not calls:
                     return message.get("content", "")
                 messages.append(message)
+                if transcript is not None:
+                    transcript.append(message)
                 for call_id, name, args in calls:
                     reply = {"role": "tool", "content": self.mcp.call(name, args)}
                     if call_id:
@@ -138,6 +149,8 @@ class LLMClient:
                     if self.api_type == "ollama":
                         reply["name"] = name
                     messages.append(reply)
+                    if transcript is not None:
+                        transcript.append(reply)
             Logger.warn(f"Stopped after {max_tool_rounds} tool rounds.")
             return message.get("content", "")
         except requests.Timeout as e:
